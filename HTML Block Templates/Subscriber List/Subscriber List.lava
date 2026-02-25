@@ -1,0 +1,24 @@
+<!-- =====================================================================================================
+-- Author:      Michael Garrison
+-- Create Date: 6/23/2025
+-- Description: Displays a panel on the internal homepage, showing the most recent subscribers to the
+--              communication list. Panel is collapsed until clicked.
+--
+-- Change History:
+--    
+-- ===================================================================================================== -->
+
+{% group where:'GroupTypeId == "32" && IsActive == "True" && IsArchived == "False"' select:'new ( Id AS Id, Name AS Name, Members AS Members )' include:'Members, Members.Person' %}
+    {[ accordion firstopen:'false']}
+        {% for group in groupItems %}
+            [[ item title:'<i class="fa fa-chevron-down pull-right"></i><i class="fa fa-bullhorn"></i> Subscribers to {{ group.Name }} ({{ group.Members | Size }})' ]]
+                <ol>
+                    {% assign members = group.Members | OrderBy:'CreatedDateTime desc, Person.LastName, Person.FirstName' %}
+                    {% for member in members %}
+                        <li><a href="/person/{{ member.PersonId }}">{{ member.Person.FullName }}</a> <small title="{{ member.CreatedDateTime }}">(added {{ member.CreatedDateTime | HumanizeDateTime }})</small></li>
+                    {% endfor %}
+                </ol>
+            [[ enditem ]]
+        {% endfor %}
+    {[ endaccordion ]}
+{% endgroup %}
