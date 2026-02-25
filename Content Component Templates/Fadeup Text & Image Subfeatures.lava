@@ -1,0 +1,64 @@
+<!-- =====================================================================================================
+-- Author:      Michael Garrison
+-- Create Date: 1/24/2026
+-- Description: Equal Flexbox containers showing text above a responsive picture. Elements fade into view
+--              as they become available. Designed for use on the homepage where there are three features
+--              shown, but it should be usable anywhere.
+--
+-- Change History:
+--    
+-- ===================================================================================================== -->
+
+{% assign channelTitleSize  =  ContentChannel | Attribute:'TitleSize' | Default:'h1' %}
+{% assign channelContentAlignment  =  ContentChannel | Attribute:'ContentAlignment' | Default:'left' %}
+{% assign textAlignment = channelContentAlignment | Downcase | Prepend:'text-' %}
+{% assign channelForegroundColor  =  ContentChannel | Attribute:'ForegroundColor' %}
+{% assign channelBackgroundColor =  ContentChannel | Attribute:'BackgroundColor' %}
+
+{% assign contentItemStyle = '' %}
+{% if channelBackgroundColor != '' %}
+    {%- capture contentItemStyle %}{{ contentItemStyle }}background-color:{{ channelBackgroundColor }};{% endcapture %}
+{% endif %}
+{% if channelForegroundColor != '' %}
+    {%- capture contentItemStyle %}{{ contentItemStyle }}color:{{ channelForegroundColor }};{% endcapture %}
+{% endif %}
+
+<div class="d-flex flex-nowrap gap-4">
+    {% for item in Items %}
+        <div class="fade-up flex-eq" {% if contentItemStyle != '' %}style="{{ contentItemStyle }}"{% endif %}>
+            <{{ channelTitleSize }}>{{ item.Title }}</{{ channelTitleSize }}>
+            <div class="{{ textAlignment }} mb-4">
+                {{ item.Content }}
+            </div>
+            
+            {% assign imageGuid = item | Attribute:'Image','RawValue' %}
+            {% if imageGuid != '' %}
+                <img alt="{{ item.Title }}" src="/GetImage.ashx?Guid={{ imageGuid }}&w=400" class="img-responsive shadow-2xl" style="border-radius: 1rem;">
+            {% endif %}
+        </div>
+    {% endfor %}
+</div>
+
+{% javascript id:'runFadeUpElements' %}
+    document.addEventListener("DOMContentLoaded", function () {
+        const fadeUps = document.querySelectorAll('.fade-up');
+    
+        fadeUps.forEach((el, index) => {
+            const delay = index * 0.25; // 0s, 0.25s, 0.5s, etc.
+            el.style.transitionDelay = `${delay}s`;
+        });
+    
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add("in-view");
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, {
+            threshold: 0.1
+        });
+    
+        fadeUps.forEach(el => observer.observe(el));
+    });
+{% endjavascript %}
