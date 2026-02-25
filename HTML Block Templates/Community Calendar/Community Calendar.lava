@@ -1,0 +1,115 @@
+/- =====================================================================================================
+-- Author:      Michael Garrison
+-- Create Date: 10/5/2025
+-- Description: This is the template for the `Event Item Occurrences Search Lava` block type that is the
+--              primary experience on the /calendar page now. Note that it uses the Date to SVG shortcode
+--              which is documented in this repo at ~/Lava Shortcodes/Community Calendar/Date to SVG.lava
+--
+--              Note: there is Pre-HTML and Post-HTML because we're modifying the labels in a strictly
+--              unsupported way. Those are in separate sections at the top of this template.
+--
+-- Change History:
+--   12/11/2025 Michael Garrison: Added pre/post HTML content to change this block's core labels.
+-- ===================================================================================================== -/
+
+//- ------------------------------------------------
+//- PRE-HTML:
+//- ------------------------------------------------
+
+{% assign canAdministrate = 'Global' | Page:'Id' | HasRightsTo:'Administrate','Rock.Model.Page' %}
+{% if canAdministrate %}<div class="alert alert-warning">Since you're a page administrator, you should be aware that the labels for this block's filters are being set using JavaScript. We need to confirm these are still working with every version update.</div>
+{% endif %}
+
+
+//- ------------------------------------------------
+//- POST-HTML:
+//- ------------------------------------------------
+
+<script>
+    document.querySelector('label[for$="_pDateRange"]').textContent = "Date Range";
+    document.querySelector('label[for$="_cblAudience"]').textContent = "Event Type";
+</script>
+
+
+//- ------------------------------------------------
+//- Block Settings > Lava Template:
+//- ------------------------------------------------
+
+{% for occurrence in EventItemOccurrences %}
+
+    {% assign occurrenceDateTime = occurrence.Schedule.iCalendarContent | DatesFromICal | First | AsDateTime %}
+    {% if occurrenceDateTime == empty or occurrenceDateTime == null %}
+        {% assign occurrenceDateTime = occurrence.Schedule.Description | Remove:'Once at ' | AsDateTime %}
+    {% else %}
+        {% assign occurrenceEndTime = occurrenceDateTime | DateAdd:occurrence.Schedule.DurationInMinutes,'m' | Date:'h:mmtt' %}
+    {% endif %}
+    
+    <hr style="border-top-color: #ddd;">
+    <div class="row margin-b-lg">
+        <div class="col-md-4">
+            <h1 class="mb-0">{{ occurrenceDateTime | Date:'ddd, MMM d' }}</h1>
+            <h2 class="mt-0">
+                {{ occurrenceDateTime | Date:'h:mmtt' }}
+                {% if occurrenceEndTime != empty and occurrenceEndTime != null %}
+                    - {{ occurrenceEndTime }}
+                {% endif %}
+            </h2>
+            <p>{{ occurrence.Location }}</p>
+            
+            <div style="text-align: center;">
+                {[ datetosvg date:'{{ occurrence.Schedule.iCalendarContent | DatesFromICal | First }}' ]}
+            </div>
+            
+        </div>  
+        <div class='col-md-8'>
+            <h3>
+                {{ occurrence | Attribute:'Topic' | Default:occurrence.EventItem.Name }}
+                <br>
+                <small style="margin-top: -0.5em;">
+                    {% case occurrence.EventItemId %}
+                        {% when 5 %} //- 928 Central Monthly Event
+                            <strong style="color: var(--color-primary);">928 Central</strong>
+                        {% when 6 %} //- Community Event
+                            <strong style="color: var(--color-primary);">{{ occurrence | Attribute:'Organization' }}</strong>
+                    {% endcase %}
+                </small>
+            </h3>
+            
+            {% case occurrence.EventItemId %}
+                {% when 5 %} //- 928 Central Monthly Event
+                    {{ occurrence | Attribute:'Synopsis' | Default:occurrence.Note | Default:'This is the regular time we schedule each month for our nonprofits to gather and get equipped. We&apos;re still finalizing the details for this month, so check back soon!' }}
+                    {% assign speaker = occurrence | Attribute:'Speaker' %}
+                    {% if speaker != empty and speaker != null %}
+                        <p>Presented by {{ speaker }}</p>
+                    {% endif %}
+                    <div class="text-right"><a href="/eventDetails/{{ occurrence.Linkages[0].UrlSlug }}" class="btn btn-primary">Event Details <i class="ti ti-chevron-right"></i></a></div>
+                {% else %}
+                    <p>{{ occurrence.Note | Default:occurrence.EventItem.Description | NewlineToBr }}</p>
+                    {% assign link = occurrence | Attribute:'LinkUrl' %}
+                    {% if link != empty and link != null %}
+                        <div class="text-right"><a href="{{ link }}" class="btn btn-primary" target="_blank">Event Page <i class="ti ti-external-link"></i></a></div>
+                    {% endif %}
+            {% endcase %}
+            
+            {% if occurrence.ContactEmail != '' or occurrence.ContactPhone != '' %}
+                <h4 style="border-bottom: 1px solid #eee;">Contact Information:</h4>
+                <dl>
+                    {% if occurrence.ContactEmail != '' %}
+                        <dt>Email:</dt>
+                        <dd>{{ occurrence.ContactEmail }}</dd>
+                    {% endif %}
+                    {% if occurrence.ContactPhone != '' %}
+                        <dt>Phone:</dt>
+                        <dd>{{ occurrence.ContactPhone }}</dd>
+                    {% endif %}
+                </dl>
+            {% endif %}
+            
+        </div>
+    </div>
+{% else %}
+    <div class="alert alert-info pb-0 mt-5">
+        <h4><i class="ti ti-map-route"></i> We've searched high and low...</h4>
+        <p>Sorry, we don't see any events for this timeframe. Please adjust your filters - or perhaps consider <a href="/calendar/add">letting the community know</a> about your own event?</p>
+    </div>
+{% endfor %}

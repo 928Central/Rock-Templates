@@ -1,0 +1,171 @@
+/- =====================================================================================================
+-- Author:      Michael Garrison
+-- Create Date: 10/5/2025
+-- Description: Passing this shortcode a date will create an SVG that looks like a calendar, with today
+--              and the day of the event highlighted. Designed for use on 928 Central's community
+--              calendar, to give a visual reference for when and how far away events are. This does
+--              not support past dates.
+--
+--              If the event is more than 30 days in the future, only (4) rows of the calendar will be
+--              shown, increasingly faded, indicating that the full timespan isn't shown.
+--
+--              Sample Usage:
+--              {[ datetosvg date:'2025-01-01' ]}
+--
+--              Parameters:
+--              date (required): the date of the event.
+--
+-- Change History:
+--    
+-- ===================================================================================================== -/
+
+//- Visual constants
+{% assign cell = 32 %}
+{% assign gap = 4 %}
+{% assign topLabel = 24 %}
+{% assign unitSize = cell | Plus:gap %}
+
+//- ------------------------------------------------------------
+
+{% assign eventDate = date | AsDateTime %}
+{% assign daysUntilEvent = eventDate | DaysUntil %}
+{% if daysUntilEvent == empty or daysUntilEvent < 0 %}
+    {% assign daysUntilEvent = 0 %}
+{% endif %}
+
+//- Determine how many week rows to show
+{% if daysUntilEvent >= 28 %}
+    //- Determine event's day of week (Sun=0, Sat=6)
+    {% assign eventDowName = date | Date:'ddd' %}
+    {% case eventDowName %}
+        {% when 'Sun' %} {% assign eventIndex = 0 %}
+        {% when 'Mon' %} {% assign eventIndex = 1 %}
+        {% when 'Tue' %} {% assign eventIndex = 2 %}
+        {% when 'Wed' %} {% assign eventIndex = 3 %}
+        {% when 'Thu' %} {% assign eventIndex = 4 %}
+        {% when 'Fri' %} {% assign eventIndex = 5 %}
+        {% when 'Sat' %} {% assign eventIndex = 6 %}
+    {% endcase %}
+    {% assign rows = 3 %}
+  
+{% else %}
+    //- Determine today's day of week (Sun=0, Sat=6)
+    {% assign dowName = 'Now' | Date:'ddd' %}
+    {% case dowName %}
+        {% when 'Sun' %} {% assign todayIndex = 0 %}
+        {% when 'Mon' %} {% assign todayIndex = 1 %}
+        {% when 'Tue' %} {% assign todayIndex = 2 %}
+        {% when 'Wed' %} {% assign todayIndex = 3 %}
+        {% when 'Thu' %} {% assign todayIndex = 4 %}
+        {% when 'Fri' %} {% assign todayIndex = 5 %}
+        {% when 'Sat' %} {% assign todayIndex = 6 %}
+    {% endcase %}
+  
+    {% assign totalSpan = daysUntilEvent | Plus: todayIndex | Plus: 1 %}
+    {% assign rows = totalSpan | DividedBy: 7 | Ceiling %}
+{% endif %}
+
+
+//- Compute total SVG width and height
+{% assign gapTotalW = 6 | Times: gap %} //- 6 gaps between 7 cols/days
+{% assign cellTotalW = 7 | Times: cell %}
+{% assign svgWidth = cellTotalW | Plus: gapTotalW %}
+
+//- Vertical starting offset
+{% assign halfgap = gap | DividedBy: 2 %}
+{% assign startY = topLabel | Plus: halfgap %}
+
+{% assign gapTotalH = rows | Minus:1 | Times: gap %}
+{% assign cellTotalH = rows | Times: cell %}
+{% assign contentHeight = cellTotalH | Plus: gapTotalH | Plus:startY %}
+{% assign svgHeight = topLabel | Plus: contentHeight %}
+
+//- Precompute ranges for rows/columns
+{% assign maxRowsIndex = rows | Minus: 1 %}
+
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="{{ svgWidth }}"
+     height="{{ svgHeight }}"
+     viewBox="0 0 {{ svgWidth }} {{ svgHeight }}"
+     preserveAspectRatio="xMidYMin meet">
+
+    //- Label showing days until the event
+    {% assign halfWidth = svgWidth | DividedBy: 2 %}
+    {% assign halfTop = topLabel | DividedBy: 2 | Floor %}
+    <text x="{{ halfWidth }}"
+          y="{{ halfTop }}"
+          dominant-baseline="middle"
+          text-anchor="middle"
+          font-family="Segoe UI, Arial, sans-serif"
+          font-size="12"
+          fill="#333">
+        {{ eventDate | HumanizeDateTime }}
+    </text>
+
+    {% for rowIndex in (0..maxRowsIndex) %}
+        {% assign rowOpacity = 1.0 %}
+        {% if daysUntilEvent > 28 %}
+            {% case rowIndex %}
+                {% when 0 %}
+                    {% assign rowOpacity = 0.33 %}
+                {% when 1 %}
+                    {% assign rowOpacity = 0.67 %}
+                {% when 2 %}
+                    {% assign rowOpacity = 1 %}
+            {% endcase %}
+        {% endif %}
+
+        {% assign rowTop = unitSize | Times:rowIndex %}
+        {% assign y = startY | Plus: rowTop %}
+
+        {% for colIndex in (0..6) %}
+            {% assign x = colIndex | Times:unitSize %}
+
+            {% assign dayIndexSinceToday = rowIndex | Times:7 | Plus:colIndex | Minus:todayIndex %}
+
+            {% assign fill = '#e6e6e6' %}
+            {% assign stroke = 'none' %}
+            {% assign strokeWidth = 0 %}
+            {% assign opacity = rowOpacity %}
+            {% assign today = 0 %}
+            {% assign eventDay = 0 %}
+
+            {% if rowIndex == 0 and colIndex == todayIndex and daysUntilEvent <= 28 %}
+                //- Highlight today's day (teal)
+                {% assign fill = 'var(--color-primary)' %}
+                {% assign opacity = 1 %}
+                {% assign today = 1 %}
+
+            {% elseif dayIndexSinceToday == daysUntilEvent or daysUntilEvent > 28 and rowIndex == maxRowsIndex and colIndex == eventIndex %}
+                //- Highlight event day (red)
+                {% assign fill = 'var(--state-danger-border)' %}
+                {% assign stroke = 'color-mix(in srgb, var(--state-danger-border) 80%, black);' %}
+                {% assign strokeWidth = 2 %}
+                {% assign opacity = 1 %}
+                {% assign eventDay = 1 %}
+        
+        
+            {% elseif colIndex == 0 or colIndex == 6 %}
+                //- Indicate Weekends
+                {% assign fill = '#d3d3d3' %}
+        
+            {% endif %}
+
+            <rect x="{{ x }}" y="{{ y }}" width="{{ cell }}" height="{{ cell }}" rx="3" ry="3"
+                  fill="{{ fill }}"
+                  {% if stroke != 'none' %}
+                    stroke="{{ stroke }}" stroke-width="{{ strokeWidth }}"
+                  {% endif %}
+                  opacity="{{ opacity }}">
+                {% if eventDay == 1 %}
+                    <title>{{ eventDate | Date:'MMM d' }}</title>
+                {% elseif today == 1 %}
+                    <title>{{ 'Now' | Date:'MMM d' }}</title>
+                {% endif %}
+            </rect>
+            {% if eventDay == 1 or today == 1 %}
+                <text x="{{ x | Plus: 1.5 }}" y="{{ y | Plus: 11.5 }}" dominant-baseline="top" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#fff">{% if eventDay == 1 %}{{ eventDate | Date:'d' }}{% else %}{{ 'Now' | Date:'d' }}{% endif %}</text>
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+</svg>
