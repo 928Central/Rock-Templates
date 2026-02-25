@@ -1,0 +1,70 @@
+-- =====================================================================================================
+-- Author:      Michael Garrison
+-- Create Date: 11/15/2025
+-- Description: Creates an Occurrence for a hardcoded Calendar Event Item, using Workflow attributes.
+--              Includes creating a new one-time schedule by forming a valid iCalendar string.
+--
+--              Any errors from the creation operations are stored in a Workflow Attribute, which can
+--              be displayed or just stored in the Workflow. We use this template in a Run Lava action
+--              only after the form submission has been reviewed and approved.
+--
+--              https://rock.928central.org/admin/general/workflows?workflowTypeId=25&ExpandedIds=C317#
+--
+-- Change History:
+--    
+-- =====================================================================================================
+
+{% assign calendarEventId = 6 %}
+
+//- ------------------------------------------------
+
+{% dbtransaction %}
+
+    {% modifyschedule id:'0' %}
+        
+        [[ property name:'IsActive' ]]True[[ endproperty ]]
+        [[ property name:'iCalendarContent' ]]
+BEGIN:VCALENDAR
+PRODID:-//rock.928central.org//928 Central
+VERSION:2.0
+BEGIN:VEVENT
+DTSTAMP:{{ 'Now' | AsDateTimeUtc | Date:'yyyyMMddTHHmmss' }}
+DTSTART:{{ Workflow | Attribute:'EventStart' | Date:'yyyyMMddTHHmmss' }}
+DTEND:{{ Workflow | Attribute:'EventStart' | Date:'yyyyMMdd' }}T{{ Workflow | Attribute:'EventEndTime' | Date:'HHmmss' }}
+SEQUENCE:0
+UID:{{ '' | UniqueIdentifier }}
+END:VEVENT
+END:VCALENDAR
+        [[ endproperty ]]
+        
+    {% endmodifyschedule %}
+
+    {% modifyeventitemoccurrence id:'0' %}
+    
+        [[ property name:'EventItemId' ]]{{ calendarEventId }}[[ endproperty ]]
+        [[ property name:'Location' ]]{{ Workflow | Attribute:'Location' }}[[ endproperty ]]
+        [[ property name:'ContactPhone' ]]{{ Workflow | Attribute:'ContactPhone' }}[[ endproperty ]]
+        [[ property name:'ContactEmail' ]]{{ Workflow | Attribute:'ContactEmail' }}[[ endproperty ]]
+        [[ property name:'Note' ]]{{ Workflow | Attribute:'Description1' }}[[ endproperty ]]
+        
+        [[ attribute key:'Topic' ]]{{ Workflow | Attribute:'EventName' }}[[ endattribute ]]
+        [[ attribute key:'Organization' ]]{{ Workflow | Attribute:'HostingOrganization' }}[[ endattribute ]]
+        [[ attribute key:'LinkUrl' ]]{{ Workflow | Attribute:'LinktoEventPage' }}[[ endattribute ]]
+        
+        [[ property name:'ScheduleId' ]]{{ ModifyResult.Schedule.Id }}[[ endproperty ]]
+    
+    {% endmodifyeventitemoccurrence %}
+
+{% enddbtransaction %}
+
+{% if TransactionResult.Success == false %}
+    <div class="alert alert-warning">
+        <strong>{{ TransactionResult.ErrorMessage }}</strong><br>
+        Validation Messages<br>
+        <ul>
+        {% for message in TransactionResult.ValidationErrors %}
+            <li>{{ message.ErrorMessage }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+{% endif %}
