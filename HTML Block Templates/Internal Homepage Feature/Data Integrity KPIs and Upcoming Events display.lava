@@ -1,0 +1,86 @@
+<!-- =====================================================================================================
+-- Author:      Michael Garrison
+-- Create Date: 6/11/2025
+-- Description: Displays top level information for internal/staff home page. Top section is KPIs for Data
+--              integrity since that's the only staff we have presently, and bottom section shows future
+--              attendance occurrences (usually used for 928 Central monthly events).
+--
+--              Note: these could be two different blocks, but there was no need to separate them initially.
+--
+-- Change History:
+--     1/5/2026 Michael Garrison: Added collapsed panel for overflow of events, now that we're adding a
+--              full year of events at a time.
+-- ===================================================================================================== -->
+
+{% connectionrequest where:'ConnectionState == "0"' groupby:'new ( ConnectionOpportunity.Name AS Name, ConnectionOpportunity.Id AS Id )' select:'new ( Key.Name AS Name, Key.Id AS Id, Select ( new ( ConnectionStatus.IsCritical AS CriticalStatus, ConnectorPersonAlias AS Connector ) ) AS Requests )' %}
+    
+    {% for opp in connectionrequestItems %}
+        {% assign connectionBoardRoute = '/people/connections/board?ConnectionOpportunityId=' | Append:opp.Id %}
+        {[ panel type:'block' title:'<a href="{{ connectionBoardRoute }}">{{ opp.Name }}</a>' ]}
+            {[ kpis ]}
+                [[ kpi icon:'fa-plug' value:'{{ opp.Requests | Size }}' label:'Active Requests' color:'green-700' url:'{{ connectionBoardRoute }}' ]][[ endkpi ]]
+                
+                [[ kpi icon:'fa-user' value:'{{ opp.Requests | Where:'Connector.PersonId',CurrentPerson.Id | Size }}' label:'Assigned To You' color:'blue-700' url:'{{ connectionBoardRoute }}' ]][[ endkpi ]]
+                
+                {% assign AssignedRequestCount = opp.Requests | Map:'Connector.PersonId' | Compact | Size %}
+                [[ kpi icon:'fa-ban' value:'{{ opp.Requests | Size | Minus:AssignedRequestCount }}' label:'Unassigned' color:'yellow-700' url:'{{ connectionBoardRoute }}' ]][[ endkpi ]]
+                
+                [[ kpi icon:'fa-warning' value:'{{ opp.Requests | Where:'CriticalStatus','true' | Size }}' label:'Critical Status' color:'orange-700' url:'{{ connectionBoardRoute }}' ]][[ endkpi ]]
+                
+            {[ endkpis ]}
+        {[ endpanel ]}
+    {% endfor %}
+    
+{% endconnectionrequest %}
+
+//- -------------------------------------------------------------------------------------------------------
+
+{% assign todayKey = 'Now' | Date:'yyyyMMdd' %}
+{% attendanceoccurrence where:'OccurrenceDateKey >= "{{ todayKey }}" && Name _! "empty"' securityenabled:'false' %}
+    {% assign count = attendanceoccurrenceItems | Size %}
+    {% if count > 0 %}
+        {[ panel type:'block' title:'Upcoming Events {{ forloop.index0 }}' ]}
+            <div class="d-grid grid-cols-md-3 gap-3">
+                {% for occ in attendanceoccurrenceItems %}
+                    {% assign invited = occ.Attendees %}
+                    {% if forloop.index0 == 3 %}
+                        </div> //- End the flexbox container
+                        
+                        <div class="panel panel-block mt-3">
+                            <div class="panel-heading" onClick="$('#MoreUpcomingEvents').toggle();" style="cursor: pointer;">
+                                <h3 class="panel-title"><i class="fa fa-chevron-down" style="display: inline !important;"></i> (more)</h3>
+                            </div>
+                            <div class="panel-body" id="MoreUpcomingEvents" style="display: none;">
+                                <div class="d-grid grid-cols-md-3 gap-3">
+                    {% endif %}
+                    <div class="card">
+                        <div class="card-header"><h4>{{ occ.Name }}</h4></div>
+                        <div class="card-body">
+                            {% assign declined = invited | Where:'RSVP',0 | Size %}
+                            
+                            //- We could use RSVP=1 for "Yes", but since people can also use the GroupSignup block, count the members instead.
+                            {% assign accepted = occ.Group.Members | Size %}
+                            
+                            <span class="label label-success">Accepted:</span> {{ accepted }}<br>
+                            <span class="label label-danger">Declined:</span> {{ declined }}
+                        </div>
+                        <div class="card-footer">
+                            <span class="pull-right">
+                                <a href="/Group/{{ occ.GroupId }}" class="btn btn-sm btn-default pull-right" tooltip="RSVP Details"><i class="fa fa-users"></i></a>    
+                                <a href="/page/592?OccurrenceId={{ occ.Id }}&GroupId={{ occ.GroupId }}" class="btn btn-sm btn-default pull-right" tooltip="Group"><i class="fa fa-user-check"></i></a>
+                            </span>
+                            <small>Total Invited: {{ invited | Size }}</small>
+                            </div>
+                    </div>
+                    {% assign lastIndex0 = forloop.index0 %}
+                {% endfor %}
+                
+                {% if lastIndex0 >= 3 %}
+                        </div>
+                    </div>
+                {% endif %}
+        
+            </div>
+        {[ endpanel ]}
+    {% endif %}
+{% endattendanceoccurrence %}
